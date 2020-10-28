@@ -1,0 +1,7 @@
+{
+    "mqtt_port": "1883",
+    "mqtt_server": "ifir-conicet.gov.ar",
+    "device_topic": "8d9uEt4tJ4RG5yj",
+    "temperature_topic": "JTvZyMAh2z3Mgmj",
+    "delay": 60
+}
