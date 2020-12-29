@@ -34,10 +34,19 @@ char  log_topic[21] ;
 //TODO: Aadd sensor topocs here
 char  temperature_topic[16];
 
+// Ip settings 
+char use_static[2] = "0";
+char static_ip[16] = "";
+char static_gw[16] = "";
+char static_sn[16] = "";
+char static_dns1[16] = "";
+char static_dns2[16] = "";
+
+
+
 // ------------------------
 unsigned int interval = 60;
-
-
+unsigned long live_since =0, check_wifi = 60;
 /* OneWire DS18B20 Configuration */
 // NOTE: Especiico del dispositivo, otros dispositivos pueden no necesitar esta libreria
   // GPIO where the DS18B20 is connected to
@@ -60,7 +69,7 @@ unsigned int interval = 60;
 
   //callback notifying us of the need to save config
   void saveConfigCallback () {
-    Serial.println("Should save config");
+   // Serial.println("Should save config");
     shouldSaveConfig = true;
   }
 
@@ -85,8 +94,7 @@ unsigned int interval = 60;
         if (configFile) {
           Serial.println("opened config file");
 
-
-          const size_t capacity = JSON_OBJECT_SIZE(5) + 196 ;
+          const size_t capacity = JSON_OBJECT_SIZE(10) + 260;
           DynamicJsonDocument doc(capacity);
           DeserializationError error = deserializeJson(doc, configFile);
             // Test if parsing succeeds.
@@ -107,13 +115,21 @@ unsigned int interval = 60;
             Serial.println(control_topic);
             // Aadd sensor topics here
             strcpy(temperature_topic, doc["temperature_topic"]);
-            Serial.println(temperature_topic);
-
 
             //--------------------------
             interval = doc["delay"];
-
             Serial.println(interval);
+            Serial.println(temperature_topic);
+            strcpy(static_ip, doc["static_ip"]);
+            Serial.println(static_ip);
+            strcpy(static_gw, doc["static_gw"]);
+            Serial.println(static_gw);
+            strcpy(static_sn, doc["static_sn"]);
+            Serial.println(static_sn);
+            strcpy(static_dns1, doc["static_dns1"]);
+            Serial.println(static_dns1);
+            strcpy(static_dns2, doc["static_dns2"]);
+            Serial.println(static_dns2);
 
             Serial.println("----------------------------------");
           } 
@@ -131,8 +147,8 @@ unsigned int interval = 60;
     // TODO: Modificar segun dispositivo agregando los topics que sean necesarios
 
     if (SPIFFS.begin()){
-      Serial.println("saving config");
-      const size_t capacity =  JSON_OBJECT_SIZE(5) + 196 ;
+      //Serial.println("saving config");
+      const size_t capacity = JSON_OBJECT_SIZE(10) + 260;
       DynamicJsonDocument doc(capacity);
 
       doc["mqtt_server"] = mqtt_server;
@@ -143,6 +159,11 @@ unsigned int interval = 60;
 
       //------------------------
       doc["delay"] = interval;
+      doc["static_ip"] = static_ip;
+      doc["static_gw"] = static_gw;
+      doc["static_sn"] = static_sn;
+      doc["static_dns1"] = static_dns1;
+      doc["static_dns2"] = static_dns2;
 
       File configFile = SPIFFS.open("/config.json", "w");
       if (!configFile) {
@@ -151,6 +172,9 @@ unsigned int interval = 60;
       serializeJsonPretty(doc, Serial);
       serializeJsonPretty(doc, configFile);
       configFile.close();
+      Serial.println("\n--------------------------------");
+      Serial.println("|Update configuration complete.|");
+      Serial.println("--------------------------------");
     }
   }
 
@@ -166,7 +190,7 @@ Ticker wifiReconnectTimer;
   char msg[MSG_BUFFER_SIZE];
   char log_msg[LOG_BUFFER_SIZE];
   unsigned long lastMsg = 0;
-  unsigned long live_since =0;
+
  /*
  TODO: General function to submit system logs
 void publish_log(char *payload){
@@ -176,23 +200,23 @@ void publish_log(char *payload){
 }
 */
 void connectToWifi() {
-  Serial.println("Connecting to Wi-Fi...");
+  Serial.println("Connecting to Wi-Fi function ... ");
   // TODO: WIfi AP name and password from config file
-  if (!wifiManager.autoConnect("ESP866-DS18B20", "12345678", 3)) {
+  if (!wifiManager.autoConnect("ESP866-DS18B20", "123456789")) {
     Serial.println("Fallo al conectar al Wifi y timeout alcanzado");
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
-    ESP.reset();
+    ESP.restart();
   }
 }
 
 void connectToMqtt() {
   Serial.println("Connecting to MQTT...");
-  Serial.println(mqtt_server);
+ /* Serial.println(mqtt_server);
   Serial.println(mqtt_port);
   Serial.println(control_topic);
   //TODO: Aadd sensor topics here
-  Serial.println(temperature_topic);
+  Serial.println(temperature_topic);*/
   mqttClient.connect();
 }
 
@@ -214,8 +238,6 @@ void onMqttConnect(bool sessionPresent) {
   Serial.print("Session present: ");
   Serial.println(sessionPresent);
   mqttClient.subscribe(control_topic, 0);
-
- 
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -259,6 +281,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   else{
     // Compando para settear el delay solo si es mayor a 5 segundos
     int delay_value = doc["delay"];
+
     if (delay_value && delay_value > 5) {
       Serial.println("seteando nuevo delay");
       interval = delay_value;
@@ -285,15 +308,31 @@ void onMqttPublish(uint16_t packetId) {
   Serial.println(packetId);
 }
 
-
+void read_and_publish_sensors(){
+    /* Toma de lecturas y envio de datos*/
+      sensors.requestTemperatures(); 
+      // Temperature in Celsius degrees
+      temp = sensors.getTempCByIndex(0);
+      snprintf (msg, 7, "%.2f", temp);
+      Serial.print("Publish message: ");
+      Serial.println(msg);
+      mqttClient.publish(temperature_topic, 0, false, msg, 7);
+      //client.publish(topic, msg);
+}
 
 /* Setup */
 void setup() {
-  sensors.begin();
+  // Iniciando debug serie
   Serial.begin(115200);
+  delay(2000);
 
+  // Iniciando termocupla
+  sensors.begin();
+  
+  
+  // Cargando archivo de configuracion
   loadConfigFromFS();
-  //delay(1000);
+  delay(1000);
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -302,27 +341,53 @@ void setup() {
   AsyncWiFiManagerParameter config_mqtt_server("server", "MQTT server", mqtt_server, 40);
   AsyncWiFiManagerParameter config_mqtt_port("port", "MQTT port", mqtt_port, 5);
   AsyncWiFiManagerParameter config_control_topic("control_topic", "Topic de Control", control_topic, 20);
+  //TODO: Add sensor topics here
   AsyncWiFiManagerParameter config_temperature_topic("temperature_topic", "Topic Temperatura", temperature_topic, 16);
+  AsyncWiFiManagerParameter config_use_static("use_static", "Usar Ip estatica", use_static, 2);
 
-  //WiFiManager
-  //Local intialization. Once its business is done, there is no need to keep it around
+  AsyncWiFiManagerParameter config_static_ip("ip", "IP del dispositivo", static_ip, 16);
+  AsyncWiFiManagerParameter config_static_gw("gw", "Puesta de enlace", static_gw, 16);
+  AsyncWiFiManagerParameter config_static_sn("sn", "Mascara de red", static_sn, 16);
+  AsyncWiFiManagerParameter config_static_dns1("dns1", "Servidor DNS 1", static_dns1, 16);
+  AsyncWiFiManagerParameter config_static_dns2("dns2", "servidor DNS 2", static_dns2, 16);
 
-  //Serial.println(mqtt_server);
   //set config save notify callback
-
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setAPCallback(configModeCallback);
-    //set static ip
-  //wifiManager.setSTAStaticIPConfig(IPAddress(10,0,1,99), IPAddress(10,0,1,1), IPAddress(255,255,255,0));
   wifiManager.setDebugOutput(false);
   //add all your parameters here
   wifiManager.addParameter(&config_mqtt_server);
   wifiManager.addParameter(&config_mqtt_port);
   wifiManager.addParameter(&config_control_topic);
-
   // TODO: Add sensor topics here
   wifiManager.addParameter(&config_temperature_topic);
 
+  wifiManager.addParameter(&config_static_ip);
+  wifiManager.addParameter(&config_static_gw);
+  wifiManager.addParameter(&config_static_sn);
+  wifiManager.addParameter(&config_static_dns1);
+  wifiManager.addParameter(&config_static_dns2);
+
+  //set static ip or dhcp
+   if (!*static_ip) {
+
+      Serial.println("Usar DHCP");
+    }
+
+    else {
+       //set static ip
+      //the commented bit only works for ESP8266 core 2.1.0 or newer
+      IPAddress _ip,_gw,_sn, _dns1, _dns2;
+      _ip.fromString(static_ip);
+      _gw.fromString(static_gw);
+      _sn.fromString(static_sn);
+      _dns1.fromString(static_dns1);
+      _dns2.fromString(static_dns2);
+      wifiManager.setSTAStaticIPConfig(_ip, _gw, _sn, _dns1, _dns2);
+      Serial.println("Usar IP Estatica");
+      
+    }
+  //
 
   //reset settings - for testing
   //wifiManager.resetSettings();
@@ -336,40 +401,58 @@ void setup() {
   //in seconds
 
   wifiManager.setTimeout(120);
- // Serial.println(mqtt_server);
-    Serial.println("Connecting to Wi-Fi...");
 
-  wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
-  wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
-
+  Serial.println("Set Up MQTT Service");
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onSubscribe(onMqttSubscribe);
   mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
   mqttClient.onPublish(onMqttPublish);
-  //Serial.println(mqtt_server);
   mqttClient.setServer( mqtt_server, atoi(mqtt_port));
+  wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
+
+  //Serial.println("Connecting to Wi-Fi...");
+  // TODO: WIfi AP name and password from config file
+  /*
+  if (!wifiManager.autoConnect("ESP866-DS18B20", "123456789", 3)) {
+    Serial.println("Fallo al conectar al Wifi y timeout alcanzado");
+    delay(3000);
+    //reset and try again, or maybe put it to deep sleep
+    ESP.restart();
+  }*/
 
   connectToWifi();
+    
+  
+  wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
 
   //if you get here you have connected to the WiFi
-  Serial.println("connected...yeey :)");
+  //Serial.println("connected...yeey :)");
 
   //save the custom parameters to FS
-  if (shouldSaveConfig) {
-      //read updated parameters
+  if (shouldSaveConfig) {    
+    Serial.println("\n---------------------");
+    Serial.println("| Saving new config |\n---------------------\n");
+
+    //read updated parameters
     strcpy(mqtt_server, config_mqtt_server.getValue());
-            Serial.println(mqtt_server);
     strcpy(mqtt_port, config_mqtt_port.getValue());
-            Serial.println(mqtt_port);
     strcpy(control_topic, config_control_topic.getValue());
-            Serial.println(control_topic);
 
-  // TODO: Add sensor topics here
+
+    // TODO: Add sensor topics here
     strcpy(temperature_topic, config_temperature_topic.getValue());
-            Serial.println(temperature_topic);
 
+
+    //------------------------------------------
+
+
+    strcpy(static_ip, config_static_ip.getValue());
+    strcpy(static_gw, config_static_gw.getValue());
+    strcpy(static_sn, config_static_sn.getValue());
+    strcpy(static_dns1, config_static_dns1.getValue());
+    strcpy(static_dns2, config_static_dns2.getValue());
     
     saveConfigToFS();    //end save
     shouldSaveConfig=false;
@@ -386,7 +469,12 @@ void setup() {
     //TODO: index page for control and info
     request->send(200, "text/plain", "Hi! I am ESP8266.");
   });
-
+  server.on("/factoryReset", HTTP_GET, [](AsyncWebServerRequest *request) {
+    //TODO: index page for control and info
+    wifiManager.resetSettings();
+    ESP.restart();
+    
+  });
   AsyncElegantOTA.begin(&server);    // Start ElegantOTA
   server.begin();
 
@@ -399,21 +487,8 @@ void loop() {
     AsyncElegantOTA.loop();
     unsigned long now = millis();
     if (now - lastMsg > interval * 1000) {
-
-      lastMsg = now;
-    
-      /* Toma de lecturas y envio de datos*/
-      sensors.requestTemperatures(); 
-      // Temperature in Celsius degrees
-      temp = sensors.getTempCByIndex(0);
-
-      snprintf (msg, 7, "%.2f", temp);
-      Serial.print("Publish message: ");
-      Serial.println(msg);
-      mqttClient.publish(temperature_topic, 0, false, msg, 7);
-
-      //client.publish(topic, msg);
-
+      lastMsg = now; 
+      read_and_publish_sensors();
     }
     if (now - live_since > interval * 1000 * 10) {
       ESP.restart();

@@ -3,5 +3,10 @@
     "mqtt_server": "ifir-conicet.gov.ar",
     "device_topic": "8d9uEt4tJ4RG5yj",
     "temperature_topic": "JTvZyMAh2z3Mgmj",
-    "delay": 60
-}
+    "delay": 60,
+    "static_ip": "",
+    "static_gw": "",
+    "static_sn": "",
+    "static_dns1": "8.8.8.8",
+    "static_dns2": "8.8.8.8"
+}   
