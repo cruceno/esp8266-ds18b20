@@ -202,7 +202,7 @@ void publish_log(char *payload){
 void connectToWifi() {
   Serial.println("Connecting to Wi-Fi function ... ");
   // TODO: WIfi AP name and password from config file
-  if (!wifiManager.autoConnect("ESP866-DS18B20", "123456789")) {
+  if (!wifiManager.autoConnect("ESP8266-DS18B20", "123456789")) {
     Serial.println("Fallo al conectar al Wifi y timeout alcanzado");
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
@@ -467,7 +467,7 @@ void setup() {
   
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     //TODO: index page for control and info
-    request->send(200, "text/plain", "Hi! I am ESP8266.");
+    request->send(200, "text/plain", "Yo soy la termocupla 1.");
   });
   server.on("/factoryReset", HTTP_GET, [](AsyncWebServerRequest *request) {
     //TODO: index page for control and info
